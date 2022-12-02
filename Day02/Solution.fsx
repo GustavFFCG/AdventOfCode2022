@@ -1,6 +1,10 @@
+#r "nuget: FSharpPlus"
+//Using FSharpPlus for map (|>>) and bind (>>=) operators
+
 open System
 open System.IO
 open Microsoft.FSharp.Collections
+open FSharpPlus
 
 let fileName = 
     fsi.CommandLineArgs 
@@ -96,33 +100,51 @@ module Round =
         + (Shape.score round.You)
 
 let parseInput(input: string seq) =
-    input
-    |> Seq.map Round.ofString
+    input |>> Round.ofString
 
 let parseInput2(input: string seq) =
-    input
-    |> Seq.map Round.ofString2
+    input |>> Round.ofString2
 
-let part1 = 
+module Tests =
+    let private tests = [
+        fun () -> 
+            "A X" |> Round.ofString
+            |> function 
+                | {Opponent = Rock ; You = Rock} -> Ok ()
+                | other -> Error $"A X gave {other}"
+        fun () -> 
+            "A X" |> Round.ofString2
+            |> function 
+                | {Opponent = Rock ; You = Scissors} -> Ok ()
+                | other -> Error $"A X gave {other}"
+    ]
+    let run () =
+        tests 
+        |> List.fold (fun state test -> state |> Result.bind test ) (Ok ())
+        |>> fun () -> "All tests Ok"
+
+let part1 =
     fileName
-    |> Result.bind readFile
-    |> Result.map parseInput
-    |> Result.map (Seq.map Round.score)
-    |> Result.map Seq.sum
-    |> function
-    | Ok i -> $"Total score part 1 is %i{i}"
-    | Error s -> $"Error: %s{s}"
+    >>= readFile
+    |>> parseInput
+    |>> (Seq.map Round.score)
+    |>> Seq.sum
+    |>> sprintf "Total score part 1 is %i"
 
-Console.WriteLine part1
-
-let part2 = 
+let part2 =
     fileName
-    |> Result.bind readFile
-    |> Result.map parseInput2
-    |> Result.map (Seq.map Round.score)
-    |> Result.map Seq.sum
-    |> function
-    | Ok i -> $"Total score part 2 is %i{i}"
-    | Error s -> $"Error: %s{s}"
+    >>= readFile
+    |>> parseInput2
+    |>> (Seq.map Round.score)
+    |>> Seq.sum
+    |>> sprintf "Total score part 2 is %i"
 
-Console.WriteLine part2
+Result.map3
+    (sprintf "Successful run!\r\n%s\r\n%s\r\n%s")
+    (Tests.run ())
+    part1
+    part2
+|> function
+| Ok s -> s
+| Error s -> sprintf "Error: %s" s 
+|> Console.WriteLine 
