@@ -21,41 +21,55 @@ let readFile fileName =
     with
         ex -> Error $"Could not read file '%s{fileName}': %s{ex.Message}" 
 
-let findMarker (s: string) =
+let findMarker length (s: string) =
     s
     |> Seq.mapi (fun i c ->
-        if i < 4 then None
+        if i < length then None
         else
-            s[(i - 4)..i]
+            s[(i - length)..(i - 1)]
             |> Set.ofSeq
             |> Set.count
-            |> function | 4 -> None | _ -> Some i
-
+            |> function | l when l = length -> Some i | _ -> None
         )
     |> Seq.find Option.isSome
-    |> fun x -> x
-    |> Option.defaultValue 0
-    |> fun x -> x + 1
+    |> function | Some i -> Ok i | None -> Error "No marker found"
+
+let part1 =
+    fileName
+    >>= readFile
+    >>= findMarker 4
+    |>> sprintf "%i"
+
+let part2 =
+    fileName
+    >>= readFile
+    >>= findMarker 14
+    |>> sprintf "%i"
+
 
 module Tests =
-    let test (s, i) =
-        let result = findMarker s
+    let testPart1 s i =
+        let result = findMarker 4 s
+        if result = i then Ok () 
+        else Error $"{s} should give {i}, was {result}"
+
+    let testPart2 s i =
+        let result = findMarker 14 s
         if result = i then Ok () 
         else Error $"{s} should give {i}, was {result}"
 
     let private tests = 
         [
-            fun () -> test ("mjqjpqmgbljsphdztnvjfqwrcgsmlb", 7) 
-            fun () -> test ("bvwbjplbgvbhsrlpgdmjqwftvncz", 5) 
+            fun () -> testPart1 "mjqjpqmgbljsphdztnvjfqwrcgsmlb" (Ok 7)
+            fun () -> testPart1 "bvwbjplbgvbhsrlpgdmjqwftvncz" (Ok 5)
+            fun () -> testPart2 "mjqjpqmgbljsphdztnvjfqwrcgsmlb" (Ok 19)
+            fun () -> testPart2 "bvwbjplbgvbhsrlpgdmjqwftvncz" (Ok 23)
         ]
     let run () =
         tests 
         |> List.fold (fun state test -> state |> Result.bind test ) (Ok ())
         |>> fun () -> "All tests Ok"
 
-let part1 = Ok "todo"
-
-let part2 = Ok "todo"
 
 Result.map3
     (sprintf "Successful run!\r\nTests: %s\r\nPart1: %s\r\nPart2: %s")
