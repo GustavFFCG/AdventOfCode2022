@@ -23,14 +23,12 @@ let readFile fileName =
 
 let findMarker length (s: string) =
     s
-    |> Seq.mapi (fun i c ->
-        if i < length then None
-        else
-            s[(i - length)..(i - 1)]
-            |> Set.ofSeq
-            |> Set.count
-            |> function | l when l = length -> Some i | _ -> None
-        )
+    |> Seq.mapi (fun i _c ->
+        s[i..(i + length - 1)]
+        |> Set.ofSeq
+        |> Set.count
+        |> function | l when l = length -> Some (i + length) | _ -> None
+    )
     |> Seq.find Option.isSome
     |> function | Some i -> Ok i | None -> Error "No marker found"
 
@@ -46,24 +44,19 @@ let part2 =
     >>= findMarker 14
     |>> sprintf "%i"
 
-
 module Tests =
-    let testPart1 s i =
-        let result = findMarker 4 s
-        if result = i then Ok () 
-        else Error $"{s} should give {i}, was {result}"
-
-    let testPart2 s i =
-        let result = findMarker 14 s
-        if result = i then Ok () 
-        else Error $"{s} should give {i}, was {result}"
+    let test length s expected =
+        findMarker length s
+        >>= fun result ->
+            if result = expected then Ok () 
+            else Error $"{s} should give {expected}, was {result}"
 
     let private tests = 
         [
-            fun () -> testPart1 "mjqjpqmgbljsphdztnvjfqwrcgsmlb" (Ok 7)
-            fun () -> testPart1 "bvwbjplbgvbhsrlpgdmjqwftvncz" (Ok 5)
-            fun () -> testPart2 "mjqjpqmgbljsphdztnvjfqwrcgsmlb" (Ok 19)
-            fun () -> testPart2 "bvwbjplbgvbhsrlpgdmjqwftvncz" (Ok 23)
+            fun () -> test 4 "mjqjpqmgbljsphdztnvjfqwrcgsmlb" 7
+            fun () -> test 4 "bvwbjplbgvbhsrlpgdmjqwftvncz" 5
+            fun () -> test 14 "mjqjpqmgbljsphdztnvjfqwrcgsmlb" 19
+            fun () -> test 14 "bvwbjplbgvbhsrlpgdmjqwftvncz" 23
         ]
     let run () =
         tests 
