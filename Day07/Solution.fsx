@@ -33,12 +33,15 @@ let (|Cd|_|) str =
             | "/" -> Root
             | ".." -> Up
             | s -> Down s 
-        |> Command.Cd |> Command |> Some 
+        |> Command.Cd |> Some 
     else None
 
 let (|Dir|_|) str =
     let m = Regex.Match(str, "dir ([a-zA-Z0-9]*)")
     if m.Success then m.Groups[1].Value |> Input.Directory |> Some else None
+
+let (|Ls|_|) str =
+    if str = "$ ls" then Command.Ls |> Some else None
 
 let (|File|_|) str =
     let m = Regex.Match(str, "([0-9]*) ([a-zA-Z0-9\.]*)")
@@ -59,10 +62,10 @@ let readFile fileName =
         ex -> Error $"Could not read file '%s{fileName}': %s{ex.Message}" 
 
 let parseLine = function
-    | Cd c -> c
-    | "$ ls" -> Ls |> Command
-    | Dir d -> d
-    | File f -> f
+    | Cd x //-> x |> Command
+    | Ls x -> x |> Command
+    | Dir x //-> d
+    | File x -> x
     | other -> failwith $"Unexpected input {other}"
 
 let parseInput input =
@@ -71,7 +74,7 @@ let parseInput input =
     |> Seq.fold
         (fun ((directories: Map<string list, Map<string, DirectoryEntry>>), path) value ->
             match value with
-                | Command Ls -> (directories, path)
+                | Command Command.Ls -> (directories, path)
                 | Command (Command.Cd Root) -> (directories, [])
                 | Command (Command.Cd Up) -> (directories, path |> List.tail )
                 | Command (Command.Cd (Down s)) -> (directories, s::path )
