@@ -62,9 +62,9 @@ let readFile fileName =
         ex -> Error $"Could not read file '%s{fileName}': %s{ex.Message}" 
 
 let parseLine = function
-    | Cd x //-> x |> Command
+    | Cd x
     | Ls x -> x |> Command
-    | Dir x //-> d
+    | Dir x
     | File x -> x
     | other -> failwith $"Unexpected input {other}"
 
