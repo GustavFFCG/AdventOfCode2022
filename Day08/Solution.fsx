@@ -44,28 +44,23 @@ let scenicScore (matrix: int[,]) =
         let length2 = Array2D.length2 matrix
         if x = 0 || y = 0 || x = (length1 - 1) || y = (length2 - 1) then 0
         else
+            let calcScene defaultValue arr = 
+                arr |> Seq.tryFindIndex (fun height -> height >= i) |>> (fun score -> score + 1) |> Option.defaultValue defaultValue
             let ``scene to top`` = 
                 matrix[x,0..(y - 1)] 
-                |> Seq.rev 
-                |> Seq.tryFindIndex (fun height -> height >= i)
-                |>> fun score -> score + 1
-                |> Option.defaultValue y
+                |> Seq.rev
+                |> calcScene y
             let ``scene to bottom`` = 
                 matrix[x,(y + 1)..(length2 - 1)]
-                |> Seq.tryFindIndex (fun height -> height >= i)
-                |>> fun score -> score + 1
-                |> Option.defaultValue (length2 - y - 1)
+                |> calcScene (length2 - y - 1)
             let ``scene to left`` = 
                 matrix[0..(x - 1),y]
                 |> Seq.rev 
-                |> Seq.tryFindIndex (fun height -> height >= i)
-                |>> fun score -> score + 1
-                |> Option.defaultValue x
+                |> calcScene x
             let ``scene to right`` = 
                 matrix[(x + 1)..(length1 - 1),y]
-                |> Seq.tryFindIndex (fun height -> height >= i)
-                |>> fun score -> score + 1
-                |> Option.defaultValue (length1 - x - 1)
+                |> calcScene (length1 - x - 1)
+
             ``scene to top`` * ``scene to bottom`` * ``scene to left`` * ``scene to right``
     )
 
@@ -74,9 +69,7 @@ let part1 =
     >>= readFile
     |>> parseInput
     |>> findHidden
-    |>> Seq.cast<bool>
-    |>> Seq.where not
-    |>> Seq.length
+    |>> (Seq.cast >> Seq.where not >> Seq.length)
     |>> sprintf "Number of hidden is %i"
 
 let part2 =
@@ -84,8 +77,7 @@ let part2 =
     >>= readFile
     |>> parseInput
     |>> scenicScore
-    |>> Seq.cast<int>
-    |>> Seq.max
+    |>> (Seq.cast >> Seq.max)
     |>> sprintf "Max score is %i"
 
 
