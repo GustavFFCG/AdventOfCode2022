@@ -30,10 +30,12 @@ let findHidden (matrix: int[,]) =
         let length2 = Array2D.length2 matrix
         if x = 0 || y = 0 || x = (length1 - 1) || y = (length2 - 1) then false
         else
-            let ``hidden from top`` = (Seq.max matrix[x,0..(y - 1)] >= i)
-            let ``hidden from bottom`` = (Seq.max matrix[x,(y + 1)..(length2 - 1)] >= i)
-            let ``hidden from left`` = (Seq.max matrix[0..(x - 1),y] >= i)
-            let ``hidden from right`` = (Seq.max matrix[(x + 1)..(length1 - 1),y] >= i)
+            let anyHigherTree arr =
+                Seq.max arr >= i
+            let ``hidden from top`` = anyHigherTree matrix[x,0..(y - 1)]
+            let ``hidden from bottom`` = anyHigherTree matrix[x,(y + 1)..(length2 - 1)]
+            let ``hidden from left`` = anyHigherTree matrix[0..(x - 1),y]
+            let ``hidden from right`` = anyHigherTree matrix[(x + 1)..(length1 - 1),y]
             ``hidden from top`` && ``hidden from bottom`` && ``hidden from left`` && ``hidden from right``
     )
 
