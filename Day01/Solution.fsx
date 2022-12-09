@@ -20,8 +20,8 @@ let parseInput =
     Seq.fold
         (fun state s ->
             match s with
-            | "" -> [] :: state
-            | input -> (int input :: state.Head) :: state.Tail
+            | "" -> [] :: state  // before [ [1;2;3];[3;4]] after [ []; [1;2;3];[3;4]]
+            | input -> (int input :: state.Head) :: state.Tail // before [ [1;2;3];[3;4]] after [ [7;1;2;3];[3;4]]
         )
         [[]]
     >> List.rev
@@ -31,8 +31,8 @@ let elfLoads =
     |> Result.bind readFile
     |> Result.map parseInput
  
-let maxCalories =
-    List.map List.sum
+let maxCalories = 
+    List.map List.sum // before [ [1;2;3];[3;4]] after [ 6;7 ]
     >> List.max
 
 let part1 = 
