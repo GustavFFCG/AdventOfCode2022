@@ -54,19 +54,18 @@ let moveHead direction state = {state with HeadPos = state.HeadPos |> move direc
 let moveTail direction state = {state with TailPos = state.TailPos |> move direction}
 
 let resolveTension ropestate =
-    ropestate
-    |> (fun x -> 
-        if fst x.TailPos < (fst x.HeadPos - 1) || (fst x.TailPos < fst x.HeadPos && Math.Abs (snd ropestate.TailPos - snd ropestate.HeadPos) > 1)
-        then x |> moveTail Right else x)
-    |> (fun x -> 
-        if fst x.TailPos > (fst x.HeadPos + 1) || (fst x.TailPos > fst x.HeadPos && Math.Abs (snd ropestate.TailPos - snd ropestate.HeadPos) > 1)
-        then x |> moveTail Left else x)
-    |> (fun x -> 
-        if snd x.TailPos < (snd x.HeadPos - 1) || (snd x.TailPos < snd x.HeadPos && Math.Abs (fst ropestate.TailPos - fst ropestate.HeadPos) > 1)
-        then x |> moveTail Up else x)
-    |> (fun x -> 
-        if snd x.TailPos > (snd x.HeadPos + 1) || (snd x.TailPos > snd x.HeadPos && Math.Abs (fst ropestate.TailPos - fst ropestate.HeadPos) > 1)
-        then x |> moveTail Down else x)
+    let distanceSqr p1 p2 = (fst p1 - fst p2) * (fst p1 - fst p2) + (snd p1 - snd p2) * (snd p1 - snd p2)
+    if distanceSqr ropestate.HeadPos ropestate.TailPos < 4 then ropestate
+    else
+        ropestate
+        |> (fun x -> 
+            if fst x.TailPos < fst x.HeadPos then x |> moveTail Right else x)
+        |> (fun x -> 
+            if fst x.TailPos > fst x.HeadPos then x |> moveTail Left else x)
+        |> (fun x -> 
+            if snd x.TailPos < snd x.HeadPos then x |> moveTail Up else x)
+        |> (fun x -> 
+            if snd x.TailPos > snd x.HeadPos then x |> moveTail Down else x)
 
 let step (state:ShortRopestate) direction =
     state 
