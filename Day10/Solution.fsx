@@ -7,10 +7,6 @@ open Microsoft.FSharp.Collections
 open FSharpPlus
 open System.Text.RegularExpressions
 
-type Instruction = 
-    | Noop
-    | Addx of int
-
 let fileName = 
     fsi.CommandLineArgs 
     |> List.ofArray
@@ -27,39 +23,29 @@ let readFile fileName =
 
 let (|Addx|_|) str =
     let m = Regex.Match(str, "addx (\-?[0-9]*)")
-    if m.Success then m.Groups[1].Value |> int |> Instruction.Addx |> Some else None
+    if m.Success then m.Groups[1].Value |> int |> Some else None
 
-let parseInput (input: string seq) =
-    input |>> function | "noop" -> Noop | Addx a -> a | other -> failwith $"unexpected input {other}"
-
-let processInstructions (instructions: Instruction seq) =
+let processInstructions instructions =
     instructions
     |> Seq.fold
         (fun (x, acc) instruction -> 
             match instruction with
-            | Noop -> (x, x::acc)
-            | Instruction.Addx i -> (x + i , x::x::acc)
+            | "noop" -> (x, x::acc)
+            | Addx i -> (x + i , x::x::acc)
+            | other -> failwith "unexpected input: {other}"
         )
         (1, [])
     |> snd
     |> rev
 
-let signalStrength i (signals: int list) =
+let signalStrength (signals: int list) i =
     signals[i - 1] * i
 
 let part1 = 
     fileName
     >>= readFile
-    |>> parseInput
     |>> processInstructions
-    |>> (fun inst -> 
-        (signalStrength 20 inst) 
-        + (signalStrength 60 inst) 
-        + (signalStrength 100 inst) 
-        + (signalStrength 140 inst) 
-        + (signalStrength 180 inst) 
-        + (signalStrength 220 inst)
-        )
+    |>> (fun inst -> [20;60;100;140;180;220] |> List.sumBy (signalStrength inst) )
     |>> sprintf "Sum is %i"
 
 let drawPixel (i: int) spritePos =
@@ -68,7 +54,6 @@ let drawPixel (i: int) spritePos =
 let part2 =
     fileName
     >>= readFile
-    |>> parseInput
     |>> processInstructions
     |>> List.mapi drawPixel
     |>> (List.splitInto 6)
