@@ -7,8 +7,16 @@ open Microsoft.FSharp.Collections
 open FSharpPlus
 
 type Distance =
+| Unknown
 | Preliminary of int
 | Final of int
+
+module Distance =
+    let isFinal = function | Final _ -> true |_ -> false
+    let finalRisk = function | Final r -> Some r | _ -> None
+    
+type Coord = {x: int; y:int}
+    with static member ofTuple (x,y) = {x=x; y=y}
 
 type SquareType = 
 | Start
@@ -19,11 +27,6 @@ with
         | 'S' -> Start
         | 'E' -> End
         | c -> Intermediate c
-
-type Square = {
-    Type: SquareType
-    Distance: Distance
-} 
 
 let fileName = 
     fsi.CommandLineArgs 
@@ -39,31 +42,123 @@ let readFile fileName =
     with
         ex -> Error $"Could not read file '%s{fileName}': %s{ex.Message}" 
 
-let parseInput (input: string seq) =
-    input |> array2D 
-    |> Array2D.map (fun c ->
-        let squareType = SquareType.ofChar c
-        {
-            Type = squareType
-            Distance = 
-                match squareType with 
-                | Start -> Preliminary 0
-                | _ -> Preliminary (System.Int32.MaxValue)
-        }
-    )
+let parseInput (input: string seq) : SquareType[,] =
+    input |>> (Seq.map SquareType.ofChar) |> array2D
 
-let djikstra (pos: int*int) (map:Square[,]) =
+module Map =
+    let arr = fileName >>= readFile |>> parseInput |> Result.defaultWith (fun s -> failwith s)
+
+
+    let width = arr |> Array2D.length1
+    let height = arr |> Array2D.length2
+
+    let maxHeight = 
+        arr |> Seq.cast<SquareType>
+        |> Seq.choose (function | Intermediate c -> Some (int c) | _ -> None)
+        |> Seq.max
+
+    let findSquare kind  =
+        let rec go x y =
+              if   y >= height then None
+              elif x >= width then go 0 (y+1)
+              elif arr[x,y] = kind then Some (x,y)
+              else go (x+1) y
+        go 0 0
+        |>> Coord.ofTuple
+        |> Option.defaultWith (fun () -> failwith $"Square of kind {kind} not found")
+
+    let findSquares kind  =
+        let rec go acc x y =
+              if   y >= height then acc
+              elif x >= width then go acc 0 (y+1)
+              elif arr[x,y] = kind then go ((x,y)::acc) (x+1) y
+              else go acc (x+1) y
+        go [] 0 0
+        |>> Coord.ofTuple
+
+    let adjacentCoordinates coord =
+        [
+            coord.x-1, coord.y
+            coord.x, coord.y-1; coord.x,coord.y+1
+            coord.x+1, coord.y
+        ]
+        |> List.map Coord.ofTuple
+        |> List.filter (fun c -> 
+            c.x >= 0 && c.y >= 0 && c.x < width && c.y < height)
+        |> List.filter (fun c ->
+            (arr[coord.x, coord.y], arr[c.x, c.y])|> function
+                | (Intermediate curr, Intermediate dest) -> (int dest) - (int curr) <= 1
+                | (Intermediate curr, End) when (int curr) < maxHeight -> false
+                | (_, _) -> true)
+
+    let aggregateDistance coord m = m |> Map.tryFind coord |> Option.defaultValue Unknown
+    
+    let isComplete (m: Map<Coord,Distance>) = 
+        not(m |> Map.exists (fun c distance -> not (Distance.isFinal distance) ))
+
+let rec dijkstra  (map: Map<Coord,Distance>) =
+    if Map.isComplete map then map
+    else
+        let minFinalNode =
+            map
+            |> Map.toSeq
+            |> Seq.map (fun (c, dist) ->
+                match dist with
+                | Preliminary r -> Some (c,r) 
+                | _ -> None)
+            |> Seq.choose id
+            |> Seq.minBy (fun (_c, i) -> i)
+        
+        let newMap = 
+            Map.adjacentCoordinates (fst minFinalNode)
+            |> List.filter (fun c -> 
+                map |> Map.aggregateDistance c |> Distance.isFinal |> not
+            )
+            |> List.fold (fun state c ->
+                let aggregate = Map.aggregateDistance c map
+                let dist = 1
+                let newAggregate = dist + (snd minFinalNode)
+                match aggregate with
+                    | Unknown -> 
+                        state |> Map.add c (Preliminary newAggregate)
+                    | Preliminary r when r > newAggregate ->
+                        state |> Map.add c (Preliminary newAggregate)
+                    | _ -> state
+                ) map
+            |> Map.add (fst minFinalNode) (Final (snd minFinalNode))
+        dijkstra newMap
     
 
 let answer1 = 
-    monad {
-        let! map = fileName >>= readFile |>> parseInput 
-        return 0
-    }
+    let startingMap = Map.empty |> Map.add (Map.findSquare Start) (Preliminary 0)
+    dijkstra startingMap
+    |> Map.find (Map.findSquare End)
+    |> function
+    | Final i -> Ok i
+    | _ -> Error "No path found"
 
-let part1 = answer1 |>> sprintf "Shortest route: %i"
+let answer2 =
+    let endSquare = Map.findSquare End
 
-let part2 = Ok "todo"
+    (Map.findSquare Start)::(Map.findSquares (Intermediate 'a'))
+    |>> (fun startingSquare ->
+        let startingMap = Map.empty |> Map.add startingSquare (Preliminary 0)
+        dijkstra startingMap
+    )
+    |>> (fun map ->
+        if (Map.containsKey endSquare map) then
+            Map.find endSquare map
+            |> function
+            | Final i -> Some i
+            | _ -> None
+        else None
+    )
+    |> List.choose id
+    |> function | [] -> Error "no solutions" | l -> List.min l |> Ok
+
+let part1 = answer1 |>> sprintf "Shortest route from start: %i"
+
+let part2 = answer2 |>> sprintf "Shortest route from start or a: %i"
 
 module Tests =
     let private tests = 
