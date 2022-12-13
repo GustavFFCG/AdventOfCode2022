@@ -10,8 +10,8 @@ let fileName =
     fsi.CommandLineArgs 
     |> List.ofArray
     |> function 
-    | _::s::_ -> Ok s 
-    | _ -> Error "Please provide a filename for input"
+    | _::s::_ -> Some s 
+    | _ -> None
 
 let readFile fileName =
     try
@@ -20,9 +20,11 @@ let readFile fileName =
     with
         ex -> Error $"Could not read file '%s{fileName}': %s{ex.Message}" 
 
-let part1 = Ok "todo"
+let part1 input = 
+    Ok "todo"
 
-let part2 = Ok "todo"
+let part2 input = 
+    Ok "todo"
 
 module Tests =
     let private tests = 
@@ -34,11 +36,16 @@ module Tests =
         |> List.fold (fun state test -> state |> Result.bind test ) (Ok ())
         |>> fun () -> "All tests Ok"
 
-Result.map3
-    (sprintf "Successful run!\r\nTests: %s\r\nPart1: %s\r\nPart2: %s")
-    (Tests.run ())
-    part1
-    part2
+let input = fileName |>> readFile
+match input with
+| Some input ->
+    Result.map3
+        (sprintf "Successful run!\r\nTests: %s\r\nPart1: %s\r\nPart2: %s")
+        (Tests.run ())
+        (part1 input)
+        (part2 input)
+| None ->
+    Tests.run () |>> sprintf "Tests only:\r\n %s"
 |> function
 | Ok s -> s
 | Error s -> sprintf "Error: %s" s 
