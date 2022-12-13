@@ -48,7 +48,6 @@ let parseInput (input: string seq) : SquareType[,] =
 module Map =
     let arr = fileName >>= readFile |>> parseInput |> Result.defaultWith (fun s -> failwith s)
 
-
     let width = arr |> Array2D.length1
     let height = arr |> Array2D.length2
 
@@ -96,6 +95,12 @@ module Map =
     let isComplete (m: Map<Coord,Distance>) = 
         not(m |> Map.exists (fun c distance -> not (Distance.isFinal distance) ))
 
+module Dict =
+    let isComplete (m: System.Collections.Generic.Dictionary<Coord,Distance>) =
+        not(m |> Seq.exists (fun x -> not (Distance.isFinal x.Value)))
+    let aggregateDistance coord (m: System.Collections.Generic.Dictionary<Coord,Distance>) = 
+        if m.ContainsKey coord then m[coord] else Unknown
+
 let rec dijkstra  (map: Map<Coord,Distance>) =
     if Map.isComplete map then map
     else
@@ -127,6 +132,32 @@ let rec dijkstra  (map: Map<Coord,Distance>) =
                 ) map
             |> Map.add (fst minFinalNode) (Final (snd minFinalNode))
         dijkstra newMap
+
+let rec mutableDijkstra  (map: byref<System.Collections.Generic.Dictionary<Coord,Distance>>) =
+    if not (Dict.isComplete map) then map
+    else
+        let minFinalNode =
+            map
+            |> Seq.map (fun x ->
+                match x.Value with
+                | Preliminary r -> Some (x.Key,r) 
+                | _ -> None)
+            |> Seq.choose id
+            |> Seq.minBy (fun (_c, i) -> i)
+        
+        let adjacent = Map.adjacentCoordinates (fst minFinalNode)
+        for coord in adjacent do
+            let aggregate = Dict.aggregateDistance coord map
+            if not (Distance.isFinal aggregate) then
+                let cost = 1
+                let newAggregate = cost + (snd minFinalNode)
+                match aggregate with
+                    | Unknown -> 
+                        map[coord] <- (Preliminary newAggregate)
+                    | Preliminary r when r > newAggregate ->
+                        map[coord] <- (Preliminary newAggregate)
+                    | _ -> ()
+        mutableDijkstra &map
     
 
 let answer1 = 
@@ -144,6 +175,25 @@ let answer2 =
     |>> (fun startingSquare ->
         let startingMap = Map.empty |> Map.add startingSquare (Preliminary 0)
         dijkstra startingMap
+    )
+    |>> (fun map ->
+        if (Map.containsKey endSquare map) then
+            Map.find endSquare map
+            |> function
+            | Final i -> Some i
+            | _ -> None
+        else None
+    )
+    |> List.choose id
+    |> function | [] -> Error "no solutions" | l -> List.min l |> Ok
+
+let answer2b =
+    let endSquare = Map.findSquare End
+
+    (Map.findSquare Start)::(Map.findSquares (Intermediate 'a'))
+    |>> (fun startingSquare ->
+        let startingMap = new System.Collections.Generic.Dictionary<Coord,Distance>(startingSquare, (Preliminary 0))
+        mutableDijkstra startingMap
     )
     |>> (fun map ->
         if (Map.containsKey endSquare map) then
