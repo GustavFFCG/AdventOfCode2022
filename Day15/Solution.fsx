@@ -24,6 +24,25 @@ type Sensor = {
     Pos: int * int
     BeaconPos: int*int
 }
+type LineSegment = {Min:int; Max: int}
+    with 
+    static member join (ls1: LineSegment) (ls2: LineSegment) =
+        {Min = Math.Min (ls1.Min, ls2.Min); Max = Math.Max (ls1.Max, ls2.Max)}
+    static member add (ls: LineSegment) (acc: LineSegment Set) =
+        let intersectingLines =
+            acc 
+            |> Seq.where (fun (ls':LineSegment) -> 
+                ((ls'.Min <= ls.Max) && (ls'.Max >= ls.Min)) || ((ls'.Max >= ls.Min) && (ls'.Min <= ls.Max))
+                )
+            |> Set.ofSeq
+        let combinedLine =
+            intersectingLines |> Seq.fold LineSegment.join ls
+
+        Set.difference acc intersectingLines
+        |> Set.add combinedLine
+
+    static member length (ls: LineSegment) = ls.Max - ls.Min
+
 let parseInput input =
     input
     |> Seq.map (fun s ->
@@ -35,48 +54,65 @@ let parseInput input =
 
 let manhattanDistance ((x1,y1):(int*int)) ((x2,y2):(int*int)) = Math.Abs (x1 - x2) + Math.Abs (y1 - y2)
 
-let posIsScannedBySensor x y (sensor: Sensor) =
-    manhattanDistance (x,y) sensor.Pos <= manhattanDistance sensor.BeaconPos sensor.Pos
+let toLineSegmentAt y (sensor: Sensor) =
+    let vertDist = Math.Abs (y - (snd sensor.Pos))
+    let horizDist = manhattanDistance sensor.BeaconPos sensor.Pos - vertDist
+    if horizDist >= 0 then Some {Min = (fst sensor.Pos) - horizDist ; Max = (fst sensor.Pos) + horizDist }
+    else None
 
-let posIsScannedByAnySensor x y (sensors: Sensor seq) =
-    sensors |> Seq.exists (fun s -> posIsScannedBySensor x y s)
-
-let scannedAtRow y sensors =
-    let minx =
-        sensors
-        |>> (fun x -> 
-            Math.Min((fst x.BeaconPos), (2* (fst x.Pos) - (fst x.BeaconPos))))
-        |> Seq.min
-    let maxx =
-        sensors
-        |>> (fun x -> 
-            Math.Max((fst x.BeaconPos), (2* (fst x.Pos) - (fst x.BeaconPos))))
-        |> Seq.max
-
-    {minx..maxx} 
-    |> Seq.where (fun x -> posIsScannedByAnySensor x y sensors)
-    |> Seq.length
 let part1 input =
     let sensors = parseInput input
-    scannedAtRow 10 sensors
-    |> sprintf "%i positions"
+    sensors
+    |>> (toLineSegmentAt 2000000)
+    |> Seq.choose id
+    |> Seq.fold (fun state ls -> LineSegment.add ls state)  Set.empty
+    |> Set.toSeq
+    |> Seq.sumBy LineSegment.length
+    |> sprintf "scanned: %i"
 
 let part2 input = 
-    "todo"
+    let sensors = parseInput input
+    let mutable y = 0
+    let beaconPos y =
+        sensors
+        |>> (toLineSegmentAt y)
+        |> Seq.choose id
+        |> Seq.fold (fun state ls -> LineSegment.add ls state)  Set.empty
+        |> Set.toList
+        |> function 
+        | [{Min=min;Max=max}] when min <= 0 && max >= 4000000 -> None
+        | [a;b] -> Math.Min(a.Max, b.Max) + 1 |> Some 
+        | other -> failwith $"error {other}"
+    let mutable x = beaconPos 0
+    while x = None && y < 4000000 do
+        if y % 100000 = 0 then Console.WriteLine $"At {y}..."
+        y <- y + 1
+        x <- beaconPos y
+    x |> Option.defaultWith (fun () -> failwith "not found")
+    |> fun x -> (int64 x) * 4000000L + (int64 y)
+    |> sprintf "Tuning freq: %i"
+
+    
 
 module Tests =
     let private tests = 
         [
             fun () -> manhattanDistance (0,0) (5,5) |> function 10 -> Ok () | x -> Error $"Dist was {x}"
-            fun () -> {Pos = (5,10); BeaconPos = (6,10)} |> posIsScannedBySensor 6 10 |> function true -> Ok () | x -> Error $"Error"
             fun () ->
-                [|
-                    "Sensor at x=8, y=7: closest beacon is at x=2, y=10"
-                    "Sensor at x=0, y=11: closest beacon is at x=2, y=10"
-                    "Sensor at x=16, y=7: closest beacon is at x=15, y=3"
-                |] 
-                |> parseInput
-                |> scannedAtRow 10 |> function 21 -> Ok () | x -> Error $"Was {x}"
+                toLineSegmentAt 10 {Pos = (5,10); BeaconPos = (6,10)}
+                |> function Some {Min = 4; Max = 6} -> Ok () | other -> Error $"Faulty LS {other}"
+            fun () -> 
+                toLineSegmentAt 0 {Pos = (8,7); BeaconPos = (2,10)}
+                |> function Some {Min = 6; Max = 10} -> Ok () | other -> Error $"Faulty LS {other}"
+            fun () -> 
+                toLineSegmentAt 10 {Pos = (8,17); BeaconPos = (9,17)}
+                |> function None -> Ok () | other -> Error $"Faulty LS {other}"
+            fun () -> 
+                LineSegment.join { Min = -2; Max = 18 } { Min = 16; Max = 24 } 
+                |> function { Min = -2; Max = 24 } -> Ok () | other -> Error $"Faulty join {other}"
+            fun () -> 
+                [|{ Min = 16; Max = 24 } |] |> Set.ofSeq |> LineSegment.add { Min = -2; Max = 18 } |> Set.toList
+                |> function [{ Min = -2; Max = 24 }] -> Ok () | other -> Error $"Faulty join {other}"
         ]
     let run () =
         tests 
