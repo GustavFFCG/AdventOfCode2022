@@ -20,11 +20,11 @@ let readFile fileName =
     with
         ex -> Error $"Could not read file '%s{fileName}': %s{ex.Message}" 
 
-let part1 input = 
-    Ok "todo"
+let part1 input =
+    "todo"
 
 let part2 input = 
-    Ok "todo"
+    "todo"
 
 module Tests =
     let private tests = 
@@ -42,8 +42,8 @@ match input with
     Result.map3
         (sprintf "Successful run!\r\nTests: %s\r\nPart1: %s\r\nPart2: %s")
         (Tests.run ())
-        (part1 input)
-        (part2 input)
+        (input |>> part1)
+        (input |>> part2)
 | None ->
     Tests.run () |>> sprintf "Tests only:\r\n %s"
 |> function
