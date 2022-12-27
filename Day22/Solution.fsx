@@ -28,8 +28,14 @@ type Instruction =
 
 type Direction =  North | South | East | West
 
-type Input = {
+type FlatInput = {
     Map: Map<(int*int), bool>
+    Path: Instruction list
+}
+
+type CubeInput = {
+    Map: Map<(int*int), (bool* int)>
+    Side: int
     Path: Instruction list
 }
 
@@ -38,7 +44,7 @@ type State = {
     Facing:  Direction
 }
 
-let parseInput (strings: string seq)=
+let parseFlatInput (strings: string seq) : FlatInput =
     let parseMap (map: string seq) =
         map
         |> Seq.mapi
@@ -74,8 +80,25 @@ let parseInput (strings: string seq)=
     | [map;path] -> {Map = parseMap map; Path = path |> head |> parsePath}
     | _ -> failwith "unexpected input"
 
-let move (map:Map<(int*int), bool>) instruction (state:State) =
-    //Console.WriteLine $"Moving from {state} by {instruction}"
+let toCubeInput (flatInput: FlatInput) : CubeInput =
+    let side = ((flatInput.Map.Keys |> Seq.map fst |> Seq.max) + 1) / 3
+    {
+        Path = flatInput.Path
+        Side = side
+        Map = 
+            flatInput.Map
+            |> Map.map (fun (x, y) dot -> 
+            dot,
+                if y < side then
+                    if x < side * 2 then 1 else 2
+                elif y < side * 2 then 3
+                elif y < side * 3 then
+                    if x < side then 4 else 5
+                else 6
+            )
+    }
+
+let moveFlat (map:Map<(int*int), bool>) instruction (state:State) =
     let facing = 
         match instruction with
         | Step _ -> state.Facing
@@ -113,6 +136,98 @@ let move (map:Map<(int*int), bool>) instruction (state:State) =
                 )
                 state.Position
     {Position = position; Facing = facing}
+let moveCube (map:Map<(int*int), (bool*int)>) (side: int) instruction (state:State) =
+    Console.WriteLine $"Moving on cube with side {side} from {state} by {instruction}"
+    match instruction with
+    | Right -> { 
+            Position = state.Position
+            Facing = 
+                state.Facing 
+                |> function | North -> East | East -> South | South -> West | West -> North 
+        }
+    | Left -> {
+            Position = state.Position
+            Facing = 
+                state.Facing 
+                |> function | North -> West | West -> South | South -> East | East -> North
+        }
+    | Step i when i <= 0 -> state
+    | Step steps ->
+        {1..steps}
+        |> Seq.fold
+            (fun state _ ->
+                let x, y = fst state.Position, snd state.Position
+                let nextPos, facing = 
+                    match state.Facing with
+                    | North -> (x, y - 1)
+                    | South -> (x, y + 1)
+                    | East -> (x + 1, y)
+                    | West -> (x - 1, y)
+                    |> fun pos' -> 
+                        if Map.containsKey pos' map && (snd map[pos']) = ((snd map[(x,y)])) then pos', state.Facing
+                        else
+                            match state.Facing, snd map[(x,y)] with
+                            | North, 1 -> 
+                                    (0, side * 3 + x % side), West
+                            | South, 1 ->
+                                pos', South
+                            | East, 1 ->
+                                pos', East
+                            | West, 1 ->
+                                (0, side * 3 - 1 - y % side), East
+
+                            | North, 2 ->
+                                (x % side, side * 4 - 1), North
+                            | South, 2 ->
+                                (side * 2 - 1, side + x % side), West
+                            | East, 2 ->
+                                (side * 2 - 1, side * 3 - 1 - y), West
+                            | West, 2 ->
+                                pos', West
+
+                            | North, 3 -> 
+                                pos', North
+                            | South, 3 ->
+                                pos', South
+                            | East, 3 ->
+                                (side * 2 + y % side, side - 1), North
+                            | West, 3 ->
+                                (y % side, side * 2), South
+
+                            | North, 4 -> 
+                                (side, side + x), East
+                            | South, 4 ->
+                                pos', South
+                            | East, 4 ->
+                                pos', East
+                            | West, 4 ->
+                                (side, side - 1 - y % side), East
+
+                            | North, 5 -> 
+                                pos', North
+                            | South, 5 ->
+                                (side - 1, side * 3  + x % side), North
+                            | East, 5 ->
+                                (side * 3 - 1, side - 1 - y % side), West
+                            | West, 5 ->
+                                pos', West
+
+                            | North, 6 -> 
+                                pos', North
+                            | South, 6 ->
+                                (side * 2 + x, 0), South
+                            | East, 6 ->
+                                (side + y % side, side * 3 - 1), North
+                            | West, 6 ->
+                                (side + y % side, 0), South
+
+                            | _ -> failwith "illegal position"
+                if not (Map.containsKey nextPos map) then 
+                    failwith $"Could not go to {nextPos} facing {facing} at ({x}, {y}) (Side {snd map[(x, y)]})"
+                elif fst map[nextPos] then { Position = nextPos ; Facing = facing }
+                else state
+            )
+            state
 
 let password (state: State) =
     Console.WriteLine $"Password for state {state}"
@@ -121,18 +236,26 @@ let password (state: State) =
     + 4L * int64 ((fst state.Position) + 1)
 
 let part1 input =
-    let notes = input |> parseInput
+    let notes = input |> parseFlatInput
     let initialState = {
         Position = notes.Map |> Map.keys |> Seq.where (fun (x,y) -> y = 0) |> Seq.min
         Facing = East
     }
     notes.Path
-    |> List.fold (fun state instruction -> move notes.Map instruction state) initialState
+    |> List.fold (fun state instruction -> moveFlat notes.Map instruction state) initialState
     |> password
     |> sprintf "Password is %i"
 
 let part2 input = 
-    "todo"
+    let notes = input |> parseFlatInput |> toCubeInput
+    let initialState = {
+        Position = notes.Side * 2, 0
+        Facing = East
+    }
+    notes.Path
+    |> List.fold (fun state instruction -> moveCube notes.Map notes.Side instruction state) initialState
+    |> password
+    |> sprintf "Password is %i"
 
 module Tests =
     let private tests = 
