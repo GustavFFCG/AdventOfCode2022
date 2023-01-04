@@ -63,11 +63,11 @@ with
             if tc2.Obsidian = 0 then None else Some (tc1.Obsidian / tc2.Obsidian)
             if tc2.Geode = 0    then None else Some (tc1.Geode / tc2.Geode)
         |] |> Seq.choose id |> Seq.min
-    static member op_GreaterThanOrEqual (tc1,tc2) = 
-            tc1.Ore >= tc2.Ore
-            && tc1.Clay >= tc2.Clay
-            && tc1.Obsidian >= tc2.Obsidian
-            && tc1.Geode >= tc2.Geode
+    static member gtOrEqual tc1 tc2 =
+        tc1.Ore >= tc2.Ore
+        && tc1.Clay >= tc2.Clay
+        && tc1.Obsidian >= tc2.Obsidian
+        && tc1.Geode >= tc2.Geode
     static member free =
         {
             Ore = 0
@@ -75,6 +75,7 @@ with
             Obsidian = 0
             Geode = 0
         }
+    static member asString tc = $"Ore: {tc.Ore} Clay: {tc.Clay} Obsidian: {tc.Obsidian} Geode: {tc.Geode}"
 
 type Blueprint = {
     OreCost: TypeCount
@@ -112,72 +113,78 @@ let parseInput input =
 
 let maxGeodesFromBlueprint (blueprint:Blueprint) =
     let robotConstruction (state: State) =
-        let evalStep cost robotFun resourceFun prevState =
+        let evalStep cost robotFun prevState =
             let newState = new List<State>()
             newState.AddRange prevState
             for state' in prevState do
-                if state'.Resources >= cost
+                if TypeCount.gtOrEqual state'.Resources cost
                 then {1..state'.Resources / cost}
                 else Seq.empty
                 |> Seq.iter ( fun i ->
                     newState.Add 
                         {state' with 
                             Robots = robotFun state'.Robots i
-                            Resources = resourceFun state'.Resources i
+                            Resources = state'.Resources - (cost * i)
                         }
                 )
             newState
             
-        let mutable newState = new HashSet<State>()
-        newState.Add state |> ignore<bool>
+        let mutable newState = new List<State>()
+        newState.Add state
         
-        newState.UnionWith(
+        newState.AddRange(
             evalStep
                 blueprint.GeodeCost 
                 (fun robots i -> {robots with Geode = robots.Geode + i})
-                (fun resources i -> resources - (blueprint.GeodeCost * i))
                 newState)
-        newState.UnionWith(
+        newState.AddRange(
             evalStep
                 blueprint.ObsidianCost
                 (fun robots i -> {robots with Obsidian = robots.Obsidian + i})
-                (fun resources i -> resources - (blueprint.ObsidianCost * i))
                 newState)
-        newState.UnionWith(
+        newState.AddRange(
             evalStep
                 blueprint.ClayCost
                 (fun robots i -> {robots with Clay = robots.Clay + i})
-                (fun resources i -> resources - (blueprint.ClayCost * i))
                 newState)
-        newState.UnionWith(
+        newState.AddRange(
             evalStep
                 blueprint.OreCost
                 (fun robots i -> {robots with Ore = robots.Ore + i})
-                (fun resources i -> resources - (blueprint.OreCost * i))
                 newState)
-
-        newState.RemoveWhere(fun st -> 
-            st.Resources >= blueprint.OreCost 
-            || st.Resources >= blueprint.ClayCost
-            || st.Resources >= blueprint.ObsidianCost
-            || st.Resources >= blueprint.GeodeCost
-            ) |> ignore<int>
         newState
 
-    let mutable states = new HashSet<State>()
-    states.Add(
-            {
-                Robots = {Ore = 1; Clay = 0; Obsidian = 0; Geode=0}
-                Resources = {Ore = 0; Clay = 0; Obsidian = 0; Geode=0}
-            }) |> ignore<bool>
+    let mutable states = new Dictionary<TypeCount, Set<TypeCount>>()
+    states.Add({Ore = 1; Clay = 0; Obsidian = 0; Geode=0}, 
+        [|{Ore = 0; Clay = 0; Obsidian = 0; Geode=0}|] |> Set.ofArray)
+
     {1..24}
     |> Seq.iter (fun i ->
         Console.WriteLine $"Minute {i}, {states.Count} states..."
-        let newState = new HashSet<State>()
-        for state in states do
-            for robotState in robotConstruction state do
-                newState.Add({robotState with Resources = robotState.Resources + state.Robots}) |> ignore<bool>
-        states <- newState
+        let newState = new List<(TypeCount*List<TypeCount>)>()
+        if i < 24 then
+            for state in states do
+                let robotState = state.Key
+                for resourceState in state.Value do
+                    for newRobotState in robotConstruction {Robots = robotState; Resources = resourceState}  do
+                        let stateToAdd = {newRobotState with Resources = newRobotState.Resources + newRobotState.Robots}
+                        if not(newState.Exists (fun (rob, res) ->
+                                TypeCount.gtOrEqual rob stateToAdd.Robots
+                                && res.Exists(fun r -> TypeCount.gtOrEqual r stateToAdd.Resources
+                                )
+                            )
+                        then
+                            newState.RemoveAll(fun st ->
+                                TypeCount.gtOrEqual stateToAdd.Robots st.Robots
+                                && TypeCount.gtOrEqual stateToAdd.Resources st.Resources
+                                ) |> ignore<int>
+                            newState.Add(stateToAdd)
+            else
+                for state in states do
+                    newState.Add({state with Resources = state.Resources + state.Robots})
+            
+        states.Clear() 
+        states.UnionWith(newState)
     )
     states 
     |> Seq.cast<State>
@@ -187,11 +194,12 @@ let maxGeodesFromBlueprint (blueprint:Blueprint) =
 let part1 input =
     input
     |> parseInput
+    |> fun x -> Console.WriteLine $"{x.Length} blueprints"; x
     |>> ((fun (s, b) ->
         Console.WriteLine $"Evaluating blueprint {s}"
         let geodes = maxGeodesFromBlueprint b
         Console.WriteLine $"Blueprint {s} gives {geodes} geodes"
-        s, maxGeodesFromBlueprint b
+        s, geodes
         ) >> snd)
     |> List.max
     |> sprintf "%i geodes"
@@ -202,7 +210,15 @@ let part2 input =
 module Tests =
     let private tests = 
         [
-            //fun () -> Error "todo"
+            fun () -> 
+                TypeCount.gtOrEqual {Ore = 2; Clay= 1; Obsidian = 0; Geode = 0} {Ore = 2; Clay= 1; Obsidian = 0; Geode = 0}
+                |> function | true -> Ok () | false -> Error "Apa 1"
+            fun () -> 
+                TypeCount.gtOrEqual {Ore = 2; Clay= 1; Obsidian = 0; Geode = 0} {Ore = 1; Clay= 2; Obsidian = 0; Geode = 0}
+                |> function | false -> Ok () | true -> Error "Apa 2"
+            fun () -> 
+                TypeCount.gtOrEqual {Ore = 1; Clay= 1; Obsidian = 0; Geode = 0} {Ore = 1; Clay= 1; Obsidian = 0; Geode = 0}
+                |> function | true -> Ok () | false -> Error "Apa 3"
         ]
     let run () =
         tests 
