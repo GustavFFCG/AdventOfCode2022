@@ -158,33 +158,72 @@ let maxGeodesFromBlueprint (blueprint:Blueprint) =
     states.Add({Ore = 1; Clay = 0; Obsidian = 0; Geode=0}, 
         [|{Ore = 0; Clay = 0; Obsidian = 0; Geode=0}|] |> Set.ofArray)
 
+    let isBetterState (existing: Dictionary<TypeCount,Set<TypeCount>>) (state: State) : bool =
+        let betterRobotStates = 
+            existing.Keys
+            |> Seq.exists (fun st -> TypeCount.gtOrEqual st state.Robots)
+        if betterRobotStates then false
+        else
+            if existing.ContainsKey(state.Robots) then
+                let existingResourceStates = existing.Item(state.Robots)
+                let betterResources = existingResourceStates |> Set.filter (fun r -> TypeCount.gtOrEqual r state.Resources)
+                if betterResources.IsEmpty 
+                then Some (state.Robots, existingResourceStates)
+                else None
+            else
+                let worseRobotStates = 
+                    existing.Keys
+                    |> Seq.where (fun st -> TypeCount.gtOrEqual state.Robots st)
+                failwith "todo"
+    let isWorseState (existing: Dictionary<TypeCount,Set<TypeCount>>) (state: State) : bool =
+        if existing.ContainsKey(state.Robots) then
+            let existingResourceStates = existing.Item(state.Robots)
+            let betterResources = existingResourceStates |> Set.filter (fun r -> TypeCount.gtOrEqual r state.Resources)
+            if betterResources.IsEmpty 
+            then Some (state.Robots, existingResourceStates)
+            else None
+        else
+            let worseRobotStates = 
+                existing.Keys
+                |> Seq.where (fun st -> TypeCount.gtOrEqual state.Robots st)
+            failwith "todo"
+    let isRelevantState (existing: Dictionary<TypeCount,Set<TypeCount>>) (state: State) : (TypeCount*Set<TypeCount>) option =
+        if existing.ContainsKey(state.Robots) then
+            let existingResourceStates = existing.Item(state.Robots)
+            let betterResources = existingResourceStates |> Set.filter (fun r -> TypeCount.gtOrEqual r state.Resources)
+            if betterResources.IsEmpty 
+            then Some (state.Robots, existingResourceStates)
+            else None
+        else
+            let worseRobotStates = 
+                existing.Keys
+                |> Seq.where (fun st -> TypeCount.gtOrEqual state.Robots st)
+            failwith "todo"
+
     {1..24}
     |> Seq.iter (fun i ->
         Console.WriteLine $"Minute {i}, {states.Count} states..."
-        let newState = new List<(TypeCount*List<TypeCount>)>()
-        if i < 24 then
-            for state in states do
-                let robotState = state.Key
+        let newStates = new Dictionary<TypeCount,Set<TypeCount>>()
+        for state in states do
+            let robotState = state.Key
+            if i < 24 then
                 for resourceState in state.Value do
                     for newRobotState in robotConstruction {Robots = robotState; Resources = resourceState}  do
                         let stateToAdd = {newRobotState with Resources = newRobotState.Resources + newRobotState.Robots}
-                        if not(newState.Exists (fun (rob, res) ->
-                                TypeCount.gtOrEqual rob stateToAdd.Robots
-                                && res.Exists(fun r -> TypeCount.gtOrEqual r stateToAdd.Resources
-                                )
-                            )
-                        then
-                            newState.RemoveAll(fun st ->
-                                TypeCount.gtOrEqual stateToAdd.Robots st.Robots
-                                && TypeCount.gtOrEqual stateToAdd.Resources st.Resources
-                                ) |> ignore<int>
-                            newState.Add(stateToAdd)
+                        if isBetterState newStates stateToAdd then
+                            newStates.Clear()
+                            newStates.Add(stateToAdd.Robots, [|stateToAdd.Resources|] |> Set.ofArray )
+                        if isWorseState newStates stateToAdd then
+                            ()
+                        match isRelevantState newStates stateToAdd with
+                            | Some (key, set) -> newStates.Item(key) <- Set.add stateToAdd.Resources set
+                            | None -> ()
+                            
             else
-                for state in states do
-                    newState.Add({state with Resources = state.Resources + state.Robots})
+                let newResources = state.Value |> Set.map (fun s -> s + robotState)
+                newStates.Add(state.Key, newResources)
             
-        states.Clear() 
-        states.UnionWith(newState)
+        states <- newStates
     )
     states 
     |> Seq.cast<State>
